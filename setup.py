@@ -11,7 +11,7 @@ setuptools.setup(
     description="Extraction concepts and semantic relations between concepts from raw russian texts",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pypa/sampleproject",
+    url="https://github.com/amkatyshev/OE",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

@@ -2,11 +2,11 @@
 
 OE – Python module for extraction concepts and semantic relations between concepts from raw russian texts
 
-[Github Markdown](https://guides.github.com/features/mastering-markdown/).
+[comment]: <> ([Github Markdown]&#40;https://guides.github.com/features/mastering-markdown/&#41;.)
 
 
 ## Installing
 
-`pip install OE`
+`pip install -i https://test.pypi.org/simple/ OE`
 
 

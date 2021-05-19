@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as file:
 
 setuptools.setup(
     name="OE",
-    version="1.0.1",
+    version="1.0.3",
     author="Alexander Katyshev",
     author_email="amkatyshev97@gmail.com",
     description="Extraction concepts and semantic relations between concepts from raw russian texts",
@@ -21,8 +21,3 @@ setuptools.setup(
     packages=setuptools.find_packages(where="src"),
     python_requires=">=3.9",
 )
-
-
-from OE import pipeline
-res = pipeline('text.txt')
-res.print()

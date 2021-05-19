@@ -15,10 +15,8 @@ class ConceptExtractor(OntologyExtractor):
         super().__init__()
         self.module_path += '/ConceptExtractor'
 
-    def load_model(self, model=None):
+    def load_model(self, model: str):
         super().load_model(model)
-        if model is None:
-            model = self.module_path + '/default.pt'
         print('Loading model for concept extraction...', end=' ')
         self.model = torch.load(model, map_location=self.device)
         self.tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')

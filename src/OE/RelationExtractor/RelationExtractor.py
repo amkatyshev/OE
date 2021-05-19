@@ -83,12 +83,10 @@ class RelationExtractor(OntologyExtractor):
         self.module_path += '/RelationExtractor'
         self.pairs = []
 
-    def load_model(self, model=None):
+    def load_model(self, model: str):
         super().load_model(model)
-        if model is None:
-            model = self.module_path + '/default.pt'
-
         print('Loading model for relation extraction...', end=' ')
+
         args = {
             'NUM_LABELS': len(self.data.relation_labels),
             'DROPOUT_RATE': 0.1,
@@ -104,7 +102,6 @@ class RelationExtractor(OntologyExtractor):
             'WEIGHT_DECAY': 0.0,
             'NUM_WARMUP_STEPS': 0,
         }
-        self.tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
         self.tokenizer.add_special_tokens({"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>"]})
         config = XLMRobertaConfig.from_pretrained('xlm-roberta-base', num_labels=args['NUM_LABELS'])
         self.model = RBERT.from_pretrained(model, config=config, args=args)

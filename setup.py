@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as file:
 
 setuptools.setup(
     name="OE",
-    version="1.0.4",
+    version="1.0.5",
     author="Alexander Katyshev",
     author_email="amkatyshev97@gmail.com",
     description="Extraction concepts and semantic relations between concepts from raw russian texts",

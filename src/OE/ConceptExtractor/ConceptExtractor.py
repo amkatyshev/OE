@@ -5,9 +5,9 @@ from tqdm import tqdm
 from rusenttokenize import ru_sent_tokenize
 import torch
 from transformers import XLMRobertaTokenizer
-from ..Utils import clean
+from ..Utils import Utils
 from ..Struct import Struct
-from src.OE.OntologyExtractor import OntologyExtractor
+from ..OntologyExtractor import OntologyExtractor
 
 
 class ConceptExtractor(OntologyExtractor):
@@ -30,7 +30,7 @@ class ConceptExtractor(OntologyExtractor):
         if os.path.isfile(data):
             with open(data, 'r', encoding='utf-8') as file:
                 data = file.read()
-        data = clean(data.lower())
+        data = Utils.clean(data.lower())
         sentences = ru_sent_tokenize(data)
 
         input_ids = []

@@ -1,8 +1,6 @@
-from src.OE.RelationExtractor import RelationExtractor
-from src.OE.ConceptExtractor import ConceptExtractor
-from src.OE.OntologyExtractor import OntologyExtractor
 from src.OE import pipeline
-
+from src.OE import ConceptExtractor
+from src.OE import RelationExtractor
 
 ce = ConceptExtractor()
 ce.load_model('tests/concepts.pt')

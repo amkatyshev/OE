@@ -5,7 +5,7 @@ from nltk.tokenize import word_tokenize
 import numpy as np
 import torch
 from rusenttokenize import ru_sent_tokenize
-from src.OE.OntologyExtractor import OntologyExtractor
+from ..OntologyExtractor import OntologyExtractor
 from transformers import PreTrainedModel, XLMRobertaModel, XLMRobertaConfig, XLM_ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP, \
     XLMRobertaTokenizer
 

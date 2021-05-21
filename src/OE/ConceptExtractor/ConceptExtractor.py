@@ -8,6 +8,7 @@ from transformers import XLMRobertaTokenizer
 from ..Utils import Utils
 from ..Struct import Struct
 from ..OntologyExtractor import OntologyExtractor
+from ..Error import FileDataError, ConceptExtractionError, ConceptModelError, ArgumentError
 
 
 class ConceptExtractor(OntologyExtractor):
@@ -15,19 +16,33 @@ class ConceptExtractor(OntologyExtractor):
         super().__init__()
         self.module_path += '/ConceptExtractor'
 
-    def load_model(self, model: str):
-        super().load_model(model)
+    def load_model(self, concept_model: str):
+        super().load_model(concept_model)
+        if not isinstance(concept_model, str):
+            raise ArgumentError("Argument 'concept_model' must be a str")
+        if len(concept_model) == 0:
+            raise ArgumentError("Argument 'concept_model' filename must not be empty")
+        if not os.path.isfile(concept_model):
+            raise ConceptModelError("Concept model file doesn't exist")
         print('Loading model for concept extraction...', end=' ')
-        self.model = torch.load(model, map_location=self.device)
-        self.tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
+        try:
+            self.model = torch.load(concept_model, map_location=self.device)
+            self.tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
+        except:
+            raise ConceptModelError('Error with loading concept model. '
+                                    'Concept model should be PyTorch model creating for concept extraction.')
         print('OK')
 
     def run(self, data: str) -> Struct:
         super().run(data)
         if not isinstance(data, str):
-            raise ValueError('Error data for concept extraction. '
-                             'Input parameter must be a string')
+            raise ArgumentError("Error data for concept extraction. "
+                                "Argument 'data' must be a string")
+        if len(data) == 0:
+            raise ArgumentError("Argument 'data' string must not be empty")
         if os.path.isfile(data):
+            if os.path.getsize(data) == 0:
+                raise FileDataError("Argument 'data' is empty file")
             with open(data, 'r', encoding='utf-8') as file:
                 data = file.read()
         data = Utils.clean(data.lower())
@@ -37,18 +52,23 @@ class ConceptExtractor(OntologyExtractor):
         attention_masks = []
         for sentence in tqdm(sentences, desc="Preparing sentences for concept extraction"):
             encoded = self.tokenizer.encode_plus(
-                        sentence,
-                        add_special_tokens=True,
-                        max_length=256,
-                        padding='max_length',
-                        truncation=True,
-                        return_attention_mask=True,
-                        return_tensors='pt'
-                   )
+                sentence,
+                add_special_tokens=True,
+                max_length=256,
+                padding='max_length',
+                truncation=True,
+                return_attention_mask=True,
+                return_tensors='pt'
+            )
 
             input_ids.append(encoded['input_ids'])
             attention_masks.append(encoded['attention_mask'])
 
+        if len(input_ids) == 0 or len(attention_masks) == 0:
+            raise ConceptExtractionError(
+                'Error occured during tokenization data for concept extraction. '
+                'Please, check your data is not empty and contains russian text'
+            )
         dataset = torch.utils.data.TensorDataset(
             torch.cat(input_ids, dim=0),
             torch.cat(attention_masks, dim=0)
@@ -56,7 +76,11 @@ class ConceptExtractor(OntologyExtractor):
         sampler = torch.utils.data.SequentialSampler(dataset)
         loader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=4)
 
-        self.model.eval()
+        try:
+            self.model.eval()
+        except:
+            raise ConceptModelError('Wrong concept extraction model. '
+                                    'Please, load correct model for concept extraction.')
         keywords = []
         for batch in tqdm(loader, desc="Concept extraction"):
             predictions = []
@@ -76,7 +100,8 @@ class ConceptExtractor(OntologyExtractor):
                         cur_tokens = [self.tokenizer.convert_ids_to_tokens(batch[0][ipred].to('cpu').numpy())[idx]]
                         idx += 1
                         while prediction[idx] != 2:
-                            cur_tokens.append(self.tokenizer.convert_ids_to_tokens(batch[0][ipred].to('cpu').numpy())[idx])
+                            cur_tokens.append(
+                                self.tokenizer.convert_ids_to_tokens(batch[0][ipred].to('cpu').numpy())[idx])
                             idx += 1
                         tokens_pred.append(cur_tokens)
                     idx += 1
@@ -104,4 +129,3 @@ class ConceptExtractor(OntologyExtractor):
             ikw += 1
         self.data.set_concepts(list(set(keywords)))
         return self.data
-

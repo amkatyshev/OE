@@ -5,6 +5,7 @@ from nltk.tokenize import word_tokenize
 import numpy as np
 import torch
 from rusenttokenize import ru_sent_tokenize
+from ..Error import RelationModelError, RelationExtractionError, ArgumentError, FileDataError
 from ..OntologyExtractor import OntologyExtractor
 from transformers import PreTrainedModel, XLMRobertaModel, XLMRobertaConfig, XLM_ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP, \
     XLMRobertaTokenizer
@@ -83,8 +84,14 @@ class RelationExtractor(OntologyExtractor):
         self.module_path += '/RelationExtractor'
         self.pairs = []
 
-    def load_model(self, model: str):
-        super().load_model(model)
+    def load_model(self, relation_model: str):
+        super().load_model(relation_model)
+        if not isinstance(relation_model, str):
+            raise ArgumentError("Argument 'relation_model' must be a str")
+        if len(relation_model) == 0:
+            raise ArgumentError("Argument 'relation_model' filename must not be empty")
+        if not os.path.isfile(relation_model):
+            raise RelationModelError("Relation model file doesn't exist")
         print('Loading model for relation extraction...', end=' ')
 
         args = {
@@ -102,69 +109,84 @@ class RelationExtractor(OntologyExtractor):
             'WEIGHT_DECAY': 0.0,
             'NUM_WARMUP_STEPS': 0,
         }
-        self.tokenizer.add_special_tokens({"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>"]})
-        config = XLMRobertaConfig.from_pretrained('xlm-roberta-base', num_labels=args['NUM_LABELS'])
-        self.model = RBERT.from_pretrained(model, config=config, args=args)
-        self.model.to(self.device)
+        try:
+            self.tokenizer.add_special_tokens({"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>"]})
+            config = XLMRobertaConfig.from_pretrained('xlm-roberta-base', num_labels=args['NUM_LABELS'])
+            self.model = RBERT.from_pretrained(relation_model, config=config, args=args)
+            self.model.to(self.device)
+        except:
+            raise RelationModelError(
+                'Error with loading relation model. '
+                'Relation model should be PyTorch model creating for relation extraction.'
+            )
         print('OK')
 
     def run(self, data: list):
         super().run(data)
         if len(data) != 2 or not isinstance(data[0], set) or not isinstance(data[1], str):
-            raise ValueError('Error data for relation extraction. '
-                             'Input parameter must be a List with 2 values, '
-                             'where first element is a set of keywords and '
-                             'second element is a string with text or filename')
-        nltk.download('punkt')
+            raise ArgumentError("Error data for relation extraction. "
+                                "Argument 'data' must be a List with 2 values, "
+                                "where first element is a set of keywords and "
+                                "second element is a string with text or filename")
+        if len(data[1]) == 0:
+            raise ArgumentError("Argument 'data[1]' string must not be empty")
+
         self.data.set_concepts(list(data[0]))
         keywords = sorted(data[0], key=len, reverse=True)
+
         if os.path.isfile(data[1]):
+            if os.path.getsize(data[1]) == 0:
+                raise FileDataError("Argument 'data[1]' is empty file")
             with open(data[1], 'r', encoding='utf-8') as file:
                 data = file.read()
         else:
             data = data[1]
+
         data = data.lower()
         data = ru_sent_tokenize(data)
 
-        for isentence, sentence in tqdm(enumerate(data), desc="Preparing sentences for relation extraction"):
-            num_entity = 1
-            sentence_words = word_tokenize(sentence, language="russian")
-            sentence_words_normal = [self.morph.parse(sentence_word)[0].normal_form for sentence_word in sentence_words]
-            for keyword in keywords:
-                keyword_words = word_tokenize(str(keyword), language="russian")
-                pos_start = None
-                symbol = None
-                if len(keyword_words) > 1:
-                    index_start = sentence.find(str(keyword))
+        nltk.download('punkt')
+
+        if len(keywords) > 0:
+            for isentence, sentence in tqdm(enumerate(data), desc="Preparing sentences for relation extraction"):
+                num_entity = 1
+                sentence_words = word_tokenize(sentence, language="russian")
+                sentence_words_normal = [self.morph.parse(sentence_word)[0].normal_form for sentence_word in sentence_words]
+                for keyword in keywords:
+                    keyword_words = word_tokenize(str(keyword), language="russian")
+                    pos_start = None
+                    symbol = None
+                    if len(keyword_words) > 1:
+                        index_start = sentence.find(str(keyword))
+                        if index_start > -1:
+                            pos_start = index_start
+                            symbol = sentence[pos_start + len(keyword)]
+                            pos_end = pos_start + len(keyword)
+                    else:
+                        try:
+                            index_start = sentence_words_normal.index(keyword)
+                        except ValueError:
+                            index_start = -1
+                        if index_start > -1:
+                            pos_start = sentence.find(sentence_words[index_start])
+                            symbol = sentence[pos_start + len(sentence_words[index_start])]
+                            pos_end = pos_start + len(sentence_words[index_start])
                     if index_start > -1:
-                        pos_start = index_start
-                        symbol = sentence[pos_start + len(keyword)]
-                        pos_end = pos_start + len(keyword)
-                else:
-                    try:
-                        index_start = sentence_words_normal.index(keyword)
-                    except ValueError:
-                        index_start = -1
-                    if index_start > -1:
-                        pos_start = sentence.find(sentence_words[index_start])
-                        symbol = sentence[pos_start + len(sentence_words[index_start])]
-                        pos_end = pos_start + len(sentence_words[index_start])
-                if index_start > -1:
-                    tag_pos = sentence.find('<', pos_start)
-                    if not symbol.isalnum() and sentence[tag_pos+1] != '/':
-                        # pos_end = pos_start + len(sentence_words[index_start])
-                        data[isentence] = data[isentence][:pos_end] + ' </e' + str(num_entity) + '>' + data[isentence][
-                                                                                                       pos_end:]
-                        data[isentence] = data[isentence][:pos_start] + '<e' + str(num_entity) + '> ' + data[isentence][
-                                                                                                        pos_start:]
-                        sentence = data[isentence]
-                        if num_entity == 1:
-                            self.pairs.append({})
-                            self.pairs[len(self.pairs) - 1]['e1'] = keyword
-                            num_entity = 2
-                        else:
-                            self.pairs[len(self.pairs) - 1]['e2'] = keyword
-                            break
+                        tag_pos = sentence.find('<', pos_start)
+                        if not symbol.isalnum() and sentence[tag_pos + 1] != '/':
+                            # pos_end = pos_start + len(sentence_words[index_start])
+                            data[isentence] = data[isentence][:pos_end] + ' </e' + str(num_entity) + '>' + data[isentence][
+                                                                                                           pos_end:]
+                            data[isentence] = data[isentence][:pos_start] + '<e' + str(num_entity) + '> ' + data[isentence][
+                                                                                                            pos_start:]
+                            sentence = data[isentence]
+                            if num_entity == 1:
+                                self.pairs.append({})
+                                self.pairs[len(self.pairs) - 1]['e1'] = keyword
+                                num_entity = 2
+                            else:
+                                self.pairs[len(self.pairs) - 1]['e2'] = keyword
+                                break
 
         ipair = 0
         while ipair < len(self.pairs):
@@ -172,10 +194,17 @@ class RelationExtractor(OntologyExtractor):
                 del self.pairs[ipair]
                 ipair -= 1
             ipair += 1
-        dataset = self.__convert_lines(data)
-        sampler = torch.utils.data.SequentialSampler(dataset)
-        loader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=1)
-        result = self.__evaluate(loader)
+
+        try:
+            dataset = self.__convert_lines(data)
+            sampler = torch.utils.data.SequentialSampler(dataset)
+            loader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=1)
+            result = self.__evaluate(loader)
+        except:
+            raise RelationExtractionError(
+                'Error occured during tokenization data for relation extraction. '
+                'Please, check your data is not empty and contains russian text'
+            )
         for i, concepts in enumerate(self.pairs):
             self.data.add_relation(result[i], concepts['e1'], concepts['e2'])
         return self.data
@@ -255,6 +284,8 @@ class RelationExtractor(OntologyExtractor):
             e1_masks.append(e1_mask)
             e2_masks.append(e2_mask)
 
+
+
         dataset = torch.utils.data.TensorDataset(torch.tensor(input_ids, dtype=torch.long),
                                                  torch.tensor(attention_masks, dtype=torch.long),
                                                  torch.tensor(labels, dtype=torch.long),
@@ -290,7 +321,5 @@ class RelationExtractor(OntologyExtractor):
         # eval_loss = eval_loss / nb_eval_steps
         if preds is not None:
             preds = np.argmax(preds, axis=1)
-
-
 
         return preds

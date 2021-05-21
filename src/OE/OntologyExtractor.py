@@ -17,8 +17,6 @@ class OntologyExtractor(ABC):
         self.data = Struct()
 
     def load_model(self, model: str):
-        if not os.path.isfile(model):
-            raise ValueError("File model doesn't exist")
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             print('There are %d GPU(s) available.' % torch.cuda.device_count())

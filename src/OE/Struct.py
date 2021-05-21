@@ -1,7 +1,9 @@
+import json
 import os
 import sys
 from typing import TextIO
 import pandas as pd
+from .Error import ArgumentError
 
 labels = [
     "Другое",
@@ -37,7 +39,7 @@ class Struct:
 
     def get_concepts(self, as_type=list):
         if as_type is not list and as_type is not set:
-            raise ValueError('as_type parameter must be list or set')
+            raise ArgumentError("Argument 'as_type' must be list or set")
         return as_type(self.concepts)
 
     def add_relation(self, relation_id: int, e1: str, e2: str):
@@ -49,11 +51,7 @@ class Struct:
             else:
                 self.relations[relation_id] = [pair]
 
-    def print(self, output=sys.stdout):
-        if not isinstance(output, type(sys.stdout)):
-            raise ValueError('output parameter must be TextIO type')
-        sys.stdout = output
-
+    def print(self):
         if len(self.concepts) > 0:
             print('Concepts:')
             for concept in self.concepts:
@@ -65,3 +63,22 @@ class Struct:
                 print(self.relation_labels.iloc[relation_id]['label'] + ':')
                 for relation in self.relations[relation_id]:
                     print("\te1: " + self.concepts[relation['e1']] + "; e2: " + self.concepts[relation['e2']])
+
+    def to_file(self, filename: str):
+        if not isinstance(filename, str):
+            raise ArgumentError("Argument 'filename' must be a str")
+        result = {}
+        if len(self.concepts) > 0:
+            result['concepts'] = self.concepts
+        if len(self.relations) > 0:
+            result['relations'] = {}
+            for relation_id, concepts in self.relations.items():
+                label = self.relation_labels.iloc[relation_id]['label']
+                result['relations'][label] = []
+                for relation in self.relations[relation_id]:
+                    result['relations'][label].append(
+                        {"e1": self.concepts[relation['e1']], "e2": self.concepts[relation['e2']]}
+                    )
+        with open(filename, "w", encoding='utf-8') as file:
+            json.dump(result, file, ensure_ascii=False)
+
